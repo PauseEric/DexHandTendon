@@ -246,7 +246,6 @@ class DXL_Motor(object):
     def switchMode(self, mode = 'position'):
         print("switching mode")
         if not self.torqueEnabled():
-            print("torque !enabled")
             if mode == 'position':
                 mode = POSITION_MODE
             elif mode == 'velocity':
@@ -255,7 +254,7 @@ class DXL_Motor(object):
                 mode = PWM_MODE
             elif mode == 'extended_position':
                 mode = EXTENDED_POSITION_MODE
-                print("switch to extended position mode")
+                # print("switch to extended position mode")
             switch_success = self.directWriteData(mode, *OPERATE_MODE_ADD_LEN)
             if switch_success:
                 self.checkOperatingMode()
@@ -497,6 +496,7 @@ class DXL_Motor(object):
             addr_len = self.write_addr_info['GOAL_VELOCITY']
             if v_cmd <= self.DXL_MAXIMUM_VELOCITY_VALUE and v_cmd >= self.DXL_MINIMUM_VELOCITY_VALUE:
                 self.directWriteData(v_cmd, addr_len['ADDR'], addr_len['LEN'],True)
+                print("Velocity Command Successfully Sent")
             else:
                 print("Command out off range")
         else:
@@ -539,7 +539,7 @@ class DXL_Motor(object):
      
     def reversal(self, reversed): #Specifically made for extended motor position and velocity control
         if reversed == True:
-            self.DIRECTION =-1 
+            self.DIRECTION =-1  
         elif reversed == False:
             self.DIRECTION = 1
         else:
