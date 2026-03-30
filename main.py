@@ -2,19 +2,25 @@ from dynaMotor import *
 #from init import settings
 import sys, math, time
 import multiprocessing as mp
+from multiprocessing import Pool
 
 HOMING_VELOCITY = 200
 
 dynamixel = DXL_Coms(deviceSerial,B_Rate)
-loose= dynamixel.createMotor("loose", motor_number = 3)
-pointer = dynamixel.createMotor("pointer", motor_number = 2)
-thumb = dynamixel.createMotor("thumb", motor_number = 1)
+loose= dynamixel.createMotor("loose", motor_number = 2)
+pointer = dynamixel.createMotor("pointer", motor_number = 1)
+thumb = dynamixel.createMotor("thumb", motor_number = 0)
 motor_name= {
-    'loose': loose,
+    'thumb': thumb,
     'pointer': pointer, 
-    'thumb': thumb
+    'loose': loose
 }
-motor_list = [loose, pointer, thumb]
+motor_ID= {
+    thumb.DXL_ID: 'thumb',
+    pointer.DXL_ID: 'pointer',
+    loose.DXL_ID: 'loose'
+}
+motor_list = [thumb, pointer, loose]
 
 #setting motor reverse direction
 pointer.reversal(True)
@@ -40,7 +46,7 @@ def main():
         if cmd == "home":
             homeAll()
         elif cmd == "move":
-            moveAll(1)
+            moveAll(0.5)
             # loose.disableMotor()
             # loose.switchMode('velocity')
             # loose.enableMotor()
@@ -92,19 +98,36 @@ def moveAll(seconds):
 
 def homeAll():
     print("Homing All Motors")
-    p1 = mp.Process(target=homeMotor, args=(loose,))
-    p2 = mp.Process(target=homeMotor, args=(pointer,))
-    p3 = mp.Process(target=homeMotor, args=(thumb,))
-    p1.start()
-    p2.start()
-    p3.start()
-
-    p1.join()
-    p2.join()
-    p3.join()
+    #Multiprocessing approach (reached permission error, untested, logically works)
+    # motors = [loose, pointer, thumb]
+    
+    # with Pool(processes=len(motors)) as pool:
+    #     pool.map(homeMotor, motors)
+    #Sequential Homing Approach
+    motors_homed= [False, False, False]
+    for motor in motor_list:
+        motor.disableMotor()
+        motor.switchMode('velocity')   
+        motor.enableMotor()
+        motor.setVelocity(HOMING_VELOCITY * motor.DIRECTION)
+    dynamixel.updateMotorData()
+    time.sleep(0.2)
+    while(motors_homed != [True, True, True]):
+        for motor in motor_list:
+            if (abs(getCurrent(motor)) > 180 and motors_homed[motor.DXL_ID] == False):
+                motor.setVelocity(0)
+                motor.disableMotor()
+                motor.switchMode('extended_position')
+                motor.enableMotor()
+                print("Homing Complete for Motor: " + motor_ID[(motor.DXL_ID)])
+                motors_homed[motor.DXL_ID] = True
+        time.sleep(0.01)
+    dynamixel.updateMotorData()
+    print("Motors Homed: " + str(motors_homed))              
     print("HOME ALL COMPLETE")
-        
-def homeMotor(target_motor):
+
+
+def homeMotor(target_motor): #homing for individual motor, made for multiprocessing approach, but reached permission error when trying to access motor data in multiple processes
     print("Homing Motor: " + str(target_motor.DXL_ID))
     target_motor.disableMotor()
     target_motor.switchMode('velocity')
@@ -149,6 +172,8 @@ def getRawCurrent(target_motor):
 if __name__ == "__main__":
     try:
         main()  
+    except KeyboardInterrupt:
+        print("Keyboard Interrupt, Disabling Motors and Exiting Program")
     finally:
         for motors in motor_list:
             motors.disableMotor()
