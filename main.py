@@ -110,7 +110,7 @@ def goHome(target_motor): #move motor to home position after homing, designed fo
     target_motor.writeExtendedPosition(motor_offset[target_motor.DXL_ID])
     dynamixel.sentAllCmd()
 
-def pinchObject(velocity):
+def pinchObject(velocity): #currently unreliable due to lack of direct control over which link of the finger moves first
     motors_pinch = [False, False, True]
     for motor in motor_list:
         motorChangeMode(motor, 'extended_position')
