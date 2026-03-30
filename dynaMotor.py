@@ -217,7 +217,6 @@ class DXL_Motor(object):
         self.DXL_MINIMUM_VELOCITY_VALUE  = -1023
         self.DXL_MINIMUM_PWM_VALUE = -885
         self.DXL_MAXIMUM_PWM_VALUE = 885
-
         self.index = 0
         self.dxl_goal_position = [self.DXL_MINIMUM_POSITION_VALUE, self.DXL_MAXIMUM_POSITION_VALUE]
         self.all_data_len      = 0
@@ -373,6 +372,8 @@ class DXL_Motor(object):
 
     def writeExtendedPosition(self, value):
         if self.OPERATING_MODE == EXTENDED_POSITION_MODE:
+            if(value < 0):  #implementation to accept negative values
+                value = value % 4294967296
             ADDR = 116
             LEN = 4
             data = [
@@ -409,7 +410,6 @@ class DXL_Motor(object):
                 print("Commond exceed maximum range")
         else:
             print("Operating Mode Error while setting position")
-
 
     def MotorCorrection(self):
         pass
