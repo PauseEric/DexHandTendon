@@ -1,19 +1,14 @@
-from dynaMotor import *
-#from init import settings
-import sys, math, time
-import multiprocessing as mp
-from multiprocessing import Pool
+from init import *
 
-HOMING_VELOCITY = 200 #velocity at which the motors will home, WILL AFFECT HOMING CURRRENT THRESHOLD
-HOMING_CURENT_THRESHOLD = 180 #current threshold at which the motors will be considered homed, WILL AFFECT HOMING VELOCITY VALUE
+THUMB_CURRENT= None
+THUMB_POSITION= None
+POINTER_CURRENT = None
+POINTER_POSITION = None
+LOOSE_CURRENT = None
+LOOSE_POSITION = None 
 
+hardware_lock = threading.Lock()
 
-GRAB_CURRENT_THRESHOLD = 180
-MOVE_VELOCITY = -1000 #velocity at which the motors will move during normal motions 
-dynamixel = DXL_Coms(deviceSerial,B_Rate)
-loose= dynamixel.createMotor("loose", motor_number = 2) 
-pointer = dynamixel.createMotor("pointer", motor_number = 1)
-thumb = dynamixel.createMotor("thumb", motor_number = 0)
 motor_name= {
     'thumb': thumb,
     'pointer': pointer, 
@@ -24,33 +19,27 @@ motor_ID= {
     pointer.DXL_ID: 'pointer',
     loose.DXL_ID: 'loose'
 }
-
 untension_val = { #specifically for homePosition, used to decrease the tension on the tendons to prevent damage over tim
     thumb.DXL_ID: 1000, #set values tuned for each motor, will need retuning if the physical  tendons are adjustced
     pointer.DXL_ID: 3000, #^
     loose.DXL_ID: 1500 #^
 }
-
 motor_offset= {
     thumb.DXL_ID: 0,
     pointer.DXL_ID: 0,
     loose.DXL_ID: 0
 }
-
 pinch_pos= {
     thumb.DXL_ID: 2093,
     pointer.DXL_ID: 6783,
     loose.DXL_ID: motor_offset[2]
 }
-
 motor_list = [thumb, pointer, loose]
 
-#setting motor reverse direction
-pointer.reversal(True)
-thumb.reversal(False)
-loose.reversal(False)
+plot_list = [thumbPlot, pointerPlot, loosePlot]
 
-print(pointer.DIRECTION)
+global THREAD_LOOP_CONDITION
+THREAD_LOOP_CONDITION = True
 
 def main():
     print("function start")
@@ -71,7 +60,11 @@ def main():
         elif cmd == "move":
             moveAll(0.5)
         elif cmd == "grab":
+            THREAD_LOOP_CONDITION = True
+            plotter = threading.Thread(target = plotFingerData, daemon =True)
+            plotter.start()
             grabObject(MOVE_VELOCITY)
+            THREAD_LOOP_CONDITION = False
         elif cmd == "open":
             for motor in motor_list:
                 motorChangeMode(motor, "extended_position")
@@ -79,17 +72,31 @@ def main():
         elif cmd == "pinch":
             pinchObject(-500)
         elif cmd == "data":
+            for plots in plot_list:
+                plots.display()
             print("All Data")
             print("Motor Pos:")
             for motor in motor_list:
                 print(getPos(motor))
             print("Offset Values:")
             print(motor_offset)
-
         else:
             print("Unknown Command")
 
-
+def plotFingerData(): #To be used with MultiThreading
+    
+    print("Plotting Data")
+    timer.start()
+    while THREAD_LOOP_CONDITION:
+        with hardware_lock:
+            thumbPlot.plotPoint(timer.reportTime(),getCurrent(thumb))
+            pointerPlot.plotPoint(timer.reportTime(), getCurrent(pointer))
+            loosePlot.plotPoint(timer.reportTime(), getCurrent(loose))
+    timer.stop()
+    print("Stopped")
+    timer.reportTime(True)
+    return(0)
+    
 def moveAll(seconds): #For testing, once motors set to extended position control mode, DO NOT USE
     for motor in motor_list:
         motor.disableMotor()
@@ -134,17 +141,19 @@ def pinchObject(velocity): #currently unreliable due to lack of direct control o
 
 def grabObject(velocity):
     motors_grab = [False, False, False]
-    for motor in motor_list:
-        motorChangeMode(motor, 'velocity')
-        motor.setVelocity(velocity * motor.DIRECTION)
+    with hardware_lock:
+        for motor in motor_list:
+            motorChangeMode(motor, 'velocity')
+            motor.setVelocity(velocity * motor.DIRECTION)
     time.sleep(0.2)
     while not all(motors_grab):
         for motor in motor_list:
-            if (abs(getCurrent(motor)) > GRAB_CURRENT_THRESHOLD and motors_grab[motor.DXL_ID] == False):
-                motor.setVelocity(0)
-                motorChangeMode(motor, 'extended_position')
-                print("Motor " + str(motor_ID[motor.DXL_ID]) + " reached grabbing state")
-                motors_grab[motor.DXL_ID] = True
+            with hardware_lock:
+                if (abs(getCurrent(motor)) > GRAB_CURRENT_THRESHOLD and motors_grab[motor.DXL_ID] == False):
+                    motor.setVelocity(0)
+                    motorChangeMode(motor, 'extended_position')
+                    print("Motor " + str(motor_ID[motor.DXL_ID]) + " reached grabbing state")
+                    motors_grab[motor.DXL_ID] = True
         time.sleep(0.01)
     print("Grabbed Object")
 
